@@ -1,9 +1,18 @@
-import { useWallet } from '@/contexts/WalletContext';
-import { useRouter } from 'expo-router';
-import { Key, Lock, Shield } from 'lucide-react-native';
-import { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useWallet } from "@/contexts/WalletContext";
+import { useRouter } from "expo-router";
+import { Key, Lock, Shield } from "lucide-react-native";
+import { useEffect } from "react";
+import {
+  ActivityIndicator,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+// index.js
+import "expo-router/entry";
+import "./polyfill";
 
 export default function WalletConnectScreen() {
   const router = useRouter();
@@ -11,7 +20,7 @@ export default function WalletConnectScreen() {
 
   useEffect(() => {
     if (isConnected) {
-      router.replace('/notes');
+      router.replace("/notes");
     }
   }, [isConnected, router]);
 
@@ -19,7 +28,7 @@ export default function WalletConnectScreen() {
     try {
       await connect();
     } catch (error) {
-      console.error('Connection failed:', error);
+      console.error("Connection failed:", error);
     }
   };
 
@@ -31,7 +40,7 @@ export default function WalletConnectScreen() {
             <View style={styles.iconContainer}>
               <Shield size={64} color="#10B981" strokeWidth={1.5} />
             </View>
-            
+
             <Text style={styles.title}>Solana Secure Notes</Text>
             <Text style={styles.subtitle}>
               Encrypted notes stored on decentralized infrastructure
@@ -62,7 +71,10 @@ export default function WalletConnectScreen() {
 
           <View style={styles.bottom}>
             <TouchableOpacity
-              style={[styles.connectButton, isConnecting && styles.connectButtonDisabled]}
+              style={[
+                styles.connectButton,
+                isConnecting && styles.connectButtonDisabled,
+              ]}
               onPress={handleConnect}
               disabled={isConnecting}
               activeOpacity={0.8}
@@ -87,7 +99,7 @@ export default function WalletConnectScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: "#0A0A0A",
   },
   safeArea: {
     flex: 1,
@@ -95,32 +107,32 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 24,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
   },
   header: {
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 80,
   },
   iconContainer: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#10B98115',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#10B98115",
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 32,
   },
   title: {
     fontSize: 32,
-    fontWeight: '700' as const,
-    color: '#FFFFFF',
+    fontWeight: "700" as const,
+    color: "#FFFFFF",
     marginBottom: 12,
-    textAlign: 'center',
+    textAlign: "center",
   },
   subtitle: {
     fontSize: 16,
-    color: '#9CA3AF',
-    textAlign: 'center',
+    color: "#9CA3AF",
+    textAlign: "center",
     lineHeight: 24,
     paddingHorizontal: 20,
   },
@@ -128,27 +140,27 @@ const styles = StyleSheet.create({
     gap: 24,
   },
   feature: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     gap: 16,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: "#1A1A1A",
     padding: 20,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#2A2A2A',
+    borderColor: "#2A2A2A",
   },
   featureText: {
     flex: 1,
   },
   featureTitle: {
     fontSize: 16,
-    fontWeight: '600' as const,
-    color: '#FFFFFF',
+    fontWeight: "600" as const,
+    color: "#FFFFFF",
     marginBottom: 4,
   },
   featureDescription: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: "#9CA3AF",
     lineHeight: 20,
   },
   bottom: {
@@ -156,11 +168,11 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   connectButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: "#10B981",
     paddingVertical: 18,
     borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     minHeight: 56,
   },
   connectButtonDisabled: {
@@ -168,13 +180,13 @@ const styles = StyleSheet.create({
   },
   connectButtonText: {
     fontSize: 18,
-    fontWeight: '600' as const,
-    color: '#000000',
+    fontWeight: "600" as const,
+    color: "#000000",
   },
   disclaimer: {
     fontSize: 12,
-    color: '#6B7280',
-    textAlign: 'center',
+    color: "#6B7280",
+    textAlign: "center",
     lineHeight: 18,
   },
 });

@@ -1,6 +1,5 @@
 import { EncryptionService } from "@/services/encryptionService";
 import { IPFSService } from "@/services/ipfsService";
-import { SolanaService } from "@/services/solanaService";
 import { EncryptedNote, Note, StoredNoteData } from "@/types/note";
 import createContextHook from "@nkzw/create-context-hook";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -11,7 +10,7 @@ const NOTES_STORAGE_KEY = "encrypted_notes";
 const IPFS_TOKEN_KEY = "ipfs_api_token";
 
 export const [NotesProvider, useNotes] = createContextHook(() => {
-  const { isConnected } = useWallet();
+  const { isConnected, getEncryptionSignature } = useWallet();
   const [notes, setNotes] = useState<EncryptedNote[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [ipfsToken, setIpfsToken] = useState<string>("");
@@ -59,11 +58,10 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
       setIsLoading(true);
 
       try {
-        const signature = await SolanaService.getEncryptionSignature();
-        const encryptionKey = EncryptionService.generateEncryptionKey(
-          "secure-notes-key",
-          signature,
-        );
+        // Get signature from Mobile Wallet Adapter for encryption key
+        const signature = await getEncryptionSignature();
+        const encryptionKey =
+          EncryptionService.generateEncryptionKey(signature);
 
         const noteData: StoredNoteData = {
           id: Date.now().toString(),
@@ -117,7 +115,7 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
         setIsLoading(false);
       }
     },
-    [isConnected, ipfsToken, notes, saveNotesToStorage],
+    [isConnected, ipfsToken, notes, saveNotesToStorage, getEncryptionSignature],
   );
 
   const getNote = useCallback(
@@ -135,11 +133,10 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
           throw new Error("Note not found");
         }
 
-        const signature = await SolanaService.getEncryptionSignature();
-        const encryptionKey = EncryptionService.generateEncryptionKey(
-          "secure-notes-key",
-          signature,
-        );
+        // Get signature from Mobile Wallet Adapter for decryption key
+        const signature = await getEncryptionSignature();
+        const encryptionKey =
+          EncryptionService.generateEncryptionKey(signature);
 
         let encryptedContent = encryptedNote.cid;
 
@@ -175,7 +172,7 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
         setIsLoading(false);
       }
     },
-    [isConnected, notes],
+    [isConnected, notes, getEncryptionSignature],
   );
 
   const deleteNote = useCallback(
