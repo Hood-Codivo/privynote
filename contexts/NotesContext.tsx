@@ -58,7 +58,6 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
       setIsLoading(true);
 
       try {
-        // Get signature from Mobile Wallet Adapter for encryption key
         const signature = await getEncryptionSignature();
         const encryptionKey =
           EncryptionService.generateEncryptionKey(signature);
@@ -133,7 +132,6 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
           throw new Error("Note not found");
         }
 
-        // Get signature from Mobile Wallet Adapter for decryption key
         const signature = await getEncryptionSignature();
         const encryptionKey =
           EncryptionService.generateEncryptionKey(signature);
@@ -173,6 +171,76 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
       }
     },
     [isConnected, notes, getEncryptionSignature],
+  );
+
+  const updateNote = useCallback(
+    async (noteId: string, title: string, content: string): Promise<Note> => {
+      if (!isConnected) {
+        throw new Error("Wallet not connected");
+      }
+
+      console.log("[NotesContext] Updating note:", noteId);
+      setIsLoading(true);
+
+      try {
+        const signature = await getEncryptionSignature();
+        const encryptionKey =
+          EncryptionService.generateEncryptionKey(signature);
+
+        const existingNote = notes.find((n) => n.id === noteId);
+        const noteData: StoredNoteData = {
+          id: noteId,
+          title,
+          content,
+          createdAt: existingNote?.createdAt || Date.now(),
+          updatedAt: Date.now(),
+        };
+
+        const encryptedContent = EncryptionService.encrypt(
+          JSON.stringify(noteData),
+          encryptionKey,
+        );
+
+        let cid = "";
+        if (ipfsToken) {
+          try {
+            cid = await IPFSService.uploadEncryptedData(
+              encryptedContent,
+              ipfsToken,
+            );
+            console.log("[NotesContext] Note updated on IPFS with CID:", cid);
+          } catch (error) {
+            console.warn(
+              "[NotesContext] IPFS upload failed, storing locally only:",
+              error,
+            );
+          }
+        }
+
+        const updatedNote: EncryptedNote = {
+          id: noteId,
+          title,
+          cid: cid || encryptedContent,
+          createdAt: noteData.createdAt,
+          updatedAt: noteData.updatedAt,
+        };
+
+        const updatedNotes = notes.map((n) =>
+          n.id === noteId ? updatedNote : n,
+        );
+        setNotes(updatedNotes);
+        await saveNotesToStorage(updatedNotes);
+
+        console.log("[NotesContext] Note updated successfully");
+        return noteData;
+      } catch (error) {
+        console.error("[NotesContext] Update note error:", error);
+        throw error;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [isConnected, ipfsToken, notes, saveNotesToStorage, getEncryptionSignature],
   );
 
   const deleteNote = useCallback(
@@ -220,6 +288,7 @@ export const [NotesProvider, useNotes] = createContextHook(() => {
     loadNotes,
     createNote,
     getNote,
+    updateNote,
     deleteNote,
     loadIPFSToken,
     saveIPFSToken,

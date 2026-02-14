@@ -2,10 +2,12 @@ import { BiometricService } from "@/services/biometricService";
 import createContextHook from "@nkzw/create-context-hook";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useMobileWallet } from "@wallet-ui/react-native-web3js";
+import bs58 from "bs58";
 import { useCallback, useEffect, useState } from "react";
 
 const AUTH_TOKEN_KEY = "mwa_auth_token";
 const CACHED_ADDRESS_KEY = "mwa_cached_address";
+const CACHED_SIGNATURE_KEY = "mwa_cached_signature";
 
 export const [WalletProvider, useWallet] = createContextHook(() => {
   const mobileWallet = useMobileWallet();
@@ -14,6 +16,7 @@ export const [WalletProvider, useWallet] = createContextHook(() => {
   const [biometricAvailable, setBiometricAvailable] = useState<boolean>(false);
   const [cachedAuthToken, setCachedAuthToken] = useState<string | null>(null);
   const [cachedAddress, setCachedAddress] = useState<string | null>(null);
+  const [cachedSignature, setCachedSignature] = useState<string | null>(null);
 
   useEffect(() => {
     initialize();
@@ -21,31 +24,28 @@ export const [WalletProvider, useWallet] = createContextHook(() => {
 
   const initialize = async () => {
     try {
-      // Check if biometric is available
       const available = await BiometricService.isAvailable();
       setBiometricAvailable(available);
 
-      // Check if biometric is enabled
       const enabled = await BiometricService.isBiometricEnabled();
       setBiometricEnabled(enabled);
 
-      // Check if app is locked
       const locked = await BiometricService.isAppLocked();
       setIsLocked(locked);
 
-      // Load cached auth token and address
-      const [token, address] = await Promise.all([
+      const [token, address, signature] = await Promise.all([
         AsyncStorage.getItem(AUTH_TOKEN_KEY),
         AsyncStorage.getItem(CACHED_ADDRESS_KEY),
+        AsyncStorage.getItem(CACHED_SIGNATURE_KEY),
       ]);
 
       if (token && address) {
         setCachedAuthToken(token);
         setCachedAddress(address);
+        setCachedSignature(signature);
         console.log("[WalletContext] Cached authorization found");
       }
 
-      // If locked and biometric enabled, require authentication
       if (locked && enabled) {
         console.log(
           "[WalletContext] App is locked, biometric authentication required",
@@ -53,19 +53,14 @@ export const [WalletProvider, useWallet] = createContextHook(() => {
         return;
       }
 
-      // Auto-reconnect if we have cached credentials and not locked
       if (token && address && !locked) {
         console.log("[WalletContext] Auto-reconnecting with cached auth...");
-        // The MobileWalletProvider will handle reconnection
       }
     } catch (error) {
       console.error("[WalletContext] Initialization error:", error);
     }
   };
 
-  /**
-   * Unlock app with biometric authentication
-   */
   const unlock = useCallback(async (): Promise<boolean> => {
     console.log("[WalletContext] Unlocking app...");
 
@@ -74,7 +69,6 @@ export const [WalletProvider, useWallet] = createContextHook(() => {
 
       if (success) {
         setIsLocked(false);
-        // After unlock, reconnect if we have cached credentials
         if (cachedAuthToken && cachedAddress && !mobileWallet.account) {
           await mobileWallet.connect();
         }
@@ -88,23 +82,29 @@ export const [WalletProvider, useWallet] = createContextHook(() => {
     }
   }, [cachedAuthToken, cachedAddress, mobileWallet]);
 
-  /**
-   * Connect wallet - uses Mobile Wallet Adapter
-   */
   const connect = useCallback(async () => {
     console.log("[WalletContext] Connecting wallet...");
 
     try {
-      // Use the connect method from useMobileWallet
       await mobileWallet.connect();
 
-      // Cache the authorization details
-      // Note: The library manages the auth token internally, but we can cache the address
       if (mobileWallet.account) {
         const address = mobileWallet.account.address.toString();
         await AsyncStorage.setItem(CACHED_ADDRESS_KEY, address);
         setCachedAddress(address);
-        console.log("[WalletContext] Wallet connected and cached:", address);
+
+        console.log("[WalletContext] Getting encryption signature...");
+        const messageBytes = new TextEncoder().encode("secure-notes-key");
+        const signature = await mobileWallet.signMessage(messageBytes);
+        const signatureBase58 = bs58.encode(signature);
+
+        await AsyncStorage.setItem(CACHED_SIGNATURE_KEY, signatureBase58);
+        setCachedSignature(signatureBase58);
+
+        console.log(
+          "[WalletContext] Wallet connected and signature cached:",
+          address,
+        );
       }
     } catch (error) {
       console.error("[WalletContext] Connection error:", error);
@@ -113,42 +113,68 @@ export const [WalletProvider, useWallet] = createContextHook(() => {
   }, [mobileWallet]);
 
   /**
-   * Lock wallet (keeps in storage, just locks the app)
+   * Disconnect wallet - CRITICAL: Clear ALL cached data
+   */
+  const disconnect = useCallback(async () => {
+    console.log("[WalletContext] Disconnecting wallet and clearing cache...");
+
+    try {
+      // Disconnect MWA session
+      await mobileWallet.disconnect();
+
+      // SECURITY FIX: Clear ALL cached data including signature
+      await AsyncStorage.multiRemove([
+        AUTH_TOKEN_KEY,
+        CACHED_ADDRESS_KEY,
+        CACHED_SIGNATURE_KEY,
+      ]);
+      setCachedAuthToken(null);
+      setCachedAddress(null);
+      setCachedSignature(null);
+
+      console.log("[WalletContext] Wallet disconnected and all cache cleared");
+    } catch (error) {
+      console.error("[WalletContext] Disconnect error:", error);
+      throw error;
+    }
+  }, [mobileWallet]);
+
+  /**
+   * Lock wallet - keeps cache for SAME wallet reconnection
    */
   const lock = useCallback(async () => {
     console.log("[WalletContext] Locking wallet...");
 
     try {
-      // If biometric is enabled, lock the app
       if (biometricEnabled) {
         await BiometricService.lockApp();
         setIsLocked(true);
       }
 
-      // Disconnect from current session (but keep cached credentials)
+      // Just disconnect session, keep cache for unlock
       await mobileWallet.disconnect();
 
-      console.log("[WalletContext] Wallet locked");
+      console.log("[WalletContext] Wallet locked (cache preserved for unlock)");
     } catch (error) {
       console.error("[WalletContext] Lock error:", error);
       throw error;
     }
   }, [biometricEnabled, mobileWallet]);
 
-  /**
-   * Permanently delete wallet/clear all cached data
-   */
   const deleteWallet = useCallback(async () => {
     console.log("[WalletContext] Permanently deleting wallet data...");
 
     try {
-      // Disconnect current session
       await mobileWallet.disconnect();
 
-      // Clear all cached data
-      await AsyncStorage.multiRemove([AUTH_TOKEN_KEY, CACHED_ADDRESS_KEY]);
+      await AsyncStorage.multiRemove([
+        AUTH_TOKEN_KEY,
+        CACHED_ADDRESS_KEY,
+        CACHED_SIGNATURE_KEY,
+      ]);
       setCachedAuthToken(null);
       setCachedAddress(null);
+      setCachedSignature(null);
 
       setIsLocked(false);
       console.log("[WalletContext] Wallet data deleted permanently");
@@ -158,12 +184,8 @@ export const [WalletProvider, useWallet] = createContextHook(() => {
     }
   }, [mobileWallet]);
 
-  /**
-   * Enable biometric authentication
-   */
   const enableBiometric = useCallback(async () => {
     try {
-      // First authenticate to enable
       const authenticated = await BiometricService.authenticate(
         "Authenticate to enable biometric unlock",
       );
@@ -181,9 +203,6 @@ export const [WalletProvider, useWallet] = createContextHook(() => {
     }
   }, []);
 
-  /**
-   * Disable biometric authentication
-   */
   const disableBiometric = useCallback(async () => {
     try {
       await BiometricService.disableBiometric();
@@ -195,9 +214,6 @@ export const [WalletProvider, useWallet] = createContextHook(() => {
     }
   }, []);
 
-  /**
-   * Sign a message using Mobile Wallet Adapter
-   */
   const signMessage = useCallback(
     async (message: string): Promise<Uint8Array> => {
       if (!mobileWallet.account) {
@@ -211,37 +227,48 @@ export const [WalletProvider, useWallet] = createContextHook(() => {
     [mobileWallet],
   );
 
-  /**
-   * Get encryption signature for note encryption
-   */
   const getEncryptionSignature = useCallback(async (): Promise<string> => {
-    const signature = await signMessage("secure-notes-key");
-    // Convert Uint8Array to base58 string
-    const bs58 = require("bs58");
-    return bs58.encode(signature);
-  }, [signMessage]);
+    if (cachedSignature) {
+      console.log("[WalletContext] Using cached encryption signature");
+      return cachedSignature;
+    }
+
+    if (mobileWallet.account) {
+      console.log(
+        "[WalletContext] No cached signature, requesting from wallet...",
+      );
+      const messageBytes = new TextEncoder().encode("secure-notes-key");
+      const signature = await mobileWallet.signMessage(messageBytes);
+      const signatureBase58 = bs58.encode(signature);
+
+      await AsyncStorage.setItem(CACHED_SIGNATURE_KEY, signatureBase58);
+      setCachedSignature(signatureBase58);
+
+      return signatureBase58;
+    }
+
+    throw new Error("Wallet not connected and no cached signature");
+  }, [cachedSignature, mobileWallet]);
+
+  const clearCachedSignature = useCallback(async () => {
+    await AsyncStorage.removeItem(CACHED_SIGNATURE_KEY);
+    setCachedSignature(null);
+    console.log("[WalletContext] Cached signature cleared");
+  }, []);
 
   return {
-    // Mobile Wallet Adapter account and connection status
     account: mobileWallet.account,
     publicKey: mobileWallet.account?.publicKey || null,
     isConnected: !!mobileWallet.account,
-    isConnecting: false, // MWA handles this internally
-
-    // Lock/unlock state
+    isConnecting: false,
     isLocked,
-
-    // Biometric state
     biometricEnabled,
     biometricAvailable,
-
-    // Cached credentials
     cachedAuthToken,
     cachedAddress,
-
-    // Actions
+    cachedSignature,
     connect,
-    disconnect: mobileWallet.disconnect,
+    disconnect, // NOW CLEARS ALL CACHE
     lock,
     unlock,
     deleteWallet,
@@ -249,8 +276,7 @@ export const [WalletProvider, useWallet] = createContextHook(() => {
     disableBiometric,
     signMessage,
     getEncryptionSignature,
-
-    // Expose the full MWA instance for advanced usage
+    clearCachedSignature,
     mobileWallet,
   };
 });

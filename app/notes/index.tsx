@@ -37,6 +37,7 @@ export default function NotesListScreen() {
         style: "default",
         onPress: async () => {
           await lock();
+
           router.replace("/");
         },
       },

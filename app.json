@@ -12,9 +12,9 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSFaceIDUsageDescription": "We use Face ID to secure your encrypted notes"
-      }
+      },
+      "bundleIdentifier": "com.codivo.PrivyNote"
     },
-
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -22,7 +22,12 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "permissions": ["USE_BIOMETRIC", "USE_FINGERPRINT"],
+      "permissions": [
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.codivo.PrivyNote"
@@ -36,7 +41,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
@@ -56,6 +61,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "24cf7f01-933a-403a-aa8b-f5cb31bbbb29"
+      }
     }
   }
 }

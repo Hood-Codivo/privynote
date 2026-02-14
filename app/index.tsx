@@ -11,8 +11,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 // index.js
-import "expo-router/entry";
-import "./polyfill";
 
 export default function WalletConnectScreen() {
   const router = useRouter();
